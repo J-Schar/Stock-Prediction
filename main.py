@@ -12,6 +12,8 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import TimeSeriesSplit
+from pandas.plotting import scatter_matrix
+from sklearn.linear_model import Ridge, Lasso
 set_style = ("whitegrid")
 
 slr = LinearRegression
@@ -22,38 +24,12 @@ df = pd.read_csv("HistoricalData_1726243581056.csv")
 
 # reverse the order of the indices in the dataframe to more easily parse data chronologically
 df = df.reindex(index=df.index[::-1])
-del df['Date']
 df = df.replace("\$", "", regex=True)
-df = df.astype("float")
+del df['Date']
+del df['Volume']
 df = df.rename(columns={"Close/Last": "Close"})
+df = df.astype("float")
 X = df.to_numpy()
-
-print(type(X))
-# Convert dataframe columns to numpy
-
-# Scale the features
-scaler = StandardScaler()
-scaler.fit(X)
-X_scale = scaler.transform(X)
-
-## Checking the scaled means and variances
-print("mean of standardized X1:",np.mean(X_scale[:,0]))
-print("variance of standardized X1:",np.var(X_scale[:,0]))
-print()
-
-print("mean of standardized X2:",np.mean(X_scale[:,1]))
-print("variance of standardized X2:",np.var(X_scale[:,1]))
-print()
-
-print("mean of standardized X3:",np.mean(X_scale[:,2]))
-print("variance of standardized X3:",np.var(X_scale[:,2]))
-print()
-
-print("mean of standardized X4:",np.mean(X_scale[:,3]))
-print("variance of standardized X4:",np.var(X_scale[:,3]))
-
-
-
 
 
 ## Make a KFold object with k=5
@@ -88,10 +64,8 @@ for i,(train_index, test_index) in enumerate(kfold.split(stocks_train)):
     ### Holdout set
     stocks_ho = stocks_train[test_index]
     
-    scaler.fit(stocks_tt)
     stocks_tt_scale = scaler.transform(stocks_tt)
 
-    scaler.fit(stocks_ho)
     stocks_ho_scale = scaler.transform(stocks_ho)
 
     ### This is Model 0 ###
@@ -109,26 +83,26 @@ for i,(train_index, test_index) in enumerate(kfold.split(stocks_train)):
 
     ## fit models on the training data, bb_tt
     ## don't forget you may need to reshape the data for simple linear regressions
-    model1.fit(stocks_tt_scale[:,2].reshape(-1,1), stocks_tt_scale[:,0])
-    model2.fit(stocks_tt_scale[:,3].reshape(-1,1), stocks_tt_scale[:,0])
-    model3.fit(stocks_tt_scale[:,4].reshape(-1,1), stocks_tt_scale[:,0])
+    model1.fit(stocks_tt_scale[:,1].reshape(-1,1), stocks_tt_scale[:,0])
+    model2.fit(stocks_tt_scale[:,2].reshape(-1,1), stocks_tt_scale[:,0])
+    model3.fit(stocks_tt_scale[:,3].reshape(-1,1), stocks_tt_scale[:,0])
 
     # No need to reshape inputs for models 5-15 due to the inputs being multi-dimensional
-    model4.fit(stocks_tt_scale[:,[2,3]], stocks_tt_scale[:,0])
-    model5.fit(stocks_tt_scale[:,[3,4]], stocks_tt_scale[:,0])
-    model6.fit(stocks_tt_scale[:,[2,4]], stocks_tt_scale[:,0])
-    model7.fit(stocks_tt_scale[:,[2,3,4]], stocks_tt_scale[:,0])
-    model8.fit(stocks_tt_scale[:,[2,3,4]], stocks_tt_scale[:,0])
+    model4.fit(stocks_tt_scale[:,[1,2]], stocks_tt_scale[:,0])
+    model5.fit(stocks_tt_scale[:,[2,3]], stocks_tt_scale[:,0])
+    model6.fit(stocks_tt_scale[:,[1,3]], stocks_tt_scale[:,0])
+    model7.fit(stocks_tt_scale[:,[1,2,3]], stocks_tt_scale[:,0])
+    model8.fit(stocks_tt_scale[:,[1,2,3]], stocks_tt_scale[:,0])
 
     ## get the prediction on holdout set
-    pred1 = model1.predict(stocks_ho_scale[:,2].reshape(-1,1))
-    pred2 = model2.predict(stocks_ho_scale[:,3].reshape(-1,1))
-    pred3 = model3.predict(stocks_ho_scale[:,4].reshape(-1,1))
-    pred4 = model4.predict(stocks_ho_scale[:,[2,3]])
-    pred5 = model5.predict(stocks_ho_scale[:,[3,4]])
-    pred6 = model6.predict(stocks_ho_scale[:,[2,4]])
-    pred7 = model7.predict(stocks_ho_scale[:,[2,3,4]])
-    pred8 = model8.predict(stocks_ho_scale[:,[2,3,4]])
+    pred1 = model1.predict(stocks_ho_scale[:,1].reshape(-1,1))
+    pred2 = model2.predict(stocks_ho_scale[:,2].reshape(-1,1))
+    pred3 = model3.predict(stocks_ho_scale[:,3].reshape(-1,1))
+    pred4 = model4.predict(stocks_ho_scale[:,[1,2]])
+    pred5 = model5.predict(stocks_ho_scale[:,[2,3]])
+    pred6 = model6.predict(stocks_ho_scale[:,[1,3]])
+    pred7 = model7.predict(stocks_ho_scale[:,[1,2,3]])
+    pred8 = model8.predict(stocks_ho_scale[:,[1,2,3]])
 
     ### Recording the MSES ###
     ## mean_squared_error takes in the true values, then the predicted values
@@ -204,24 +178,27 @@ plt.xticks([0,1,2,3,4,5,6,7,8],["Model 0", "Model 1", "Model 2", "Model 3", "Mod
 plt.yticks(fontsize=10)
 
 plt.ylabel("MSE", fontsize=12)
-# plt.show()
 
-# Here, I print the mean MSE (across the 5 cross-validations) for each model. It turns out that model6, which is the multi-linear model
-# on all four features, has the smallest mean MSE. 
+# Here, I print the mean MSE (across the 5 cross-validations) for each model. It turns out that model7, which is the multi-linear model
+# on all three features, has the smallest mean MSE. 
 mses_mean = []
 for i in range(0,9):
     mses_mean.append(mses[i].mean())
 print(mses_mean)
+print("min mse ",min(mses_mean))
+
+
 # Below, I created a plot which visualizes the dependences between each variable. Visually, it appears that there is a roughly linear 
-# relationship between each pair of features, as well as between each feature and the target.
+# relationship between each pair of features, as well as between each feature and the target. It turns out that the relationship between
+# any two features in this model is linear, so we will only use linear regression.
 scatter_matrix(df, figsize=(14,14), alpha=.9)
 
-# As one can see in the plot below, here is no discernible pattern in the graph plotting residuals against predicted values.
+# As one can see in the plot below, there is no discernible pattern in the graph plotting residuals against predicted values.
 reg = LinearRegression(copy_X=True)
-reg.fit(df[['Volume','Open','High','Low']].values, df['Close'])
+reg.fit(df[['Open','High','Low']].values, df['Close'])
 
 plt.figure(figsize=(8,6))
-y_pred = reg.predict(df[['Volume','Open','High','Low']].values)
+y_pred = reg.predict(df[['Open','High','Low']].values)
 residuals = df['Close'] - y_pred
 plt.scatter(y_pred, residuals)
 plt.xlabel("$\hat{y}$", fontsize=12)
